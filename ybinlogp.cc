@@ -5,7 +5,10 @@
  */
 
 #define _XOPEN_SOURCE 600
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#define DEFINED_GNU_SOURCE
+#endif /* _GNU_SOURCE */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,13 +23,17 @@
 
 #include "ybinlogp.hh"
 
+#ifdef DEFINED_GNU_SOURCE
 #undef _GNU_SOURCE
+#undef DEFINED_GNU_SOURCE
+#endif /* DEFINED_GNU_SOURCE */
+
 #include <boost/python.hpp>
 #include <boost/format.hpp>
 #include <boost/bind.hpp>
 #include <iostream>
 
-// Python bindings... all of it... seriously */
+// Python bindings
 
 namespace {
     std::string entry_str (const yelp::binlog::entry &evbuf) {
@@ -115,6 +122,8 @@ BOOST_PYTHON_MODULE(ybinlogp) {
         ;
 }
 
+// End of python bindings.
+
 namespace {
     // how many bytes to seek ahead looking for a record
     static const uint32_t MAX_RETRIES = 102400;
@@ -133,6 +142,36 @@ namespace {
 
     // Used in main to toggle dumping query details or not.
     int q_mode = 0;
+
+    enum e_event_types {
+        UNKNOWN_EVENT=0,
+        START_EVENT_V3=1,
+        QUERY_EVENT=2,
+        STOP_EVENT=3,
+        ROTATE_EVENT=4,
+        INTVAR_EVENT=5,
+        LOAD_EVENT=6,
+        SLAVE_EVENT=7,
+        CREATE_FILE_EVENT=8,
+        APPEND_BLOCK_EVENT=9,
+        EXEC_LOAD_EVENT=10,
+        DELETE_FILE_EVENT=11,
+        NEW_LOAD_EVENT=12,
+        RAND_EVENT=13,
+        USER_VAR_EVENT=14,
+        FORMAT_DESCRIPTION_EVENT=15,
+        XID_EVENT=16,
+        BEGIN_LOAD_QUERY_EVENT=17,
+        EXECUTE_LOAD_QUERY_EVENT=18,
+        TABLE_MAP_EVENT=19,
+        PRE_GA_WRITE_ROWS_EVENT=20,
+        PRE_GA_DELETE_ROWS_EVENT=21,
+        WRITE_ROWS_EVENT=22,
+        UPDATE_ROWS_EVENT=23,
+        DELETE_ROWS_EVENT=24,
+        INCIDENT_EVENT=25,
+        HEARTBEAT_LOG_EVENT=26
+    };
 
     const char* event_types[27] = {
         "UNKNOWN_EVENT",			// 0
@@ -271,6 +310,37 @@ namespace {
         }
         return 0;
     }
+
+    template<typename Ch,  typename Tr>
+    void print_statement_event(std::basic_ostream<Ch, Tr> &os, const event_buffer &ev, int verbosity, char *database_limit) {
+        if (ev.data == NULL) {
+            return;
+        }
+        switch ((enum e_event_types)ev.type_code) {
+        case QUERY_EVENT: {
+            size_t statement_len = query_event_statement_len((&ev));
+            char *statement = (char*)alloca (statement_len + 1);
+            memcpy (statement, (const char*)query_event_statement((&ev)), statement_len);
+            statement[statement_len] = '\0';
+            char* db_name = query_event_db_name((&ev));
+            if (database_limit != NULL && strncmp (db_name, database_limit, strlen (database_limit)) != 0) {
+                return;
+            }
+            if (verbosity <= 1 || strncmp(statement, "BEGIN", 5) != 0) {
+                os << statement << '\n';
+            }
+            break;
+        }
+        case XID_EVENT: {
+            if (verbosity <= 1) {
+                os << "COMMIT\n";
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
 }
 
 
@@ -303,9 +373,8 @@ namespace yelp {
         if (ev.data == NULL) {
             return os;
         }
-        switch (ev.type_code) {
-        case 2: {
-            // QUERY_EVENT
+        switch ((e_event_types)ev.type_code) {
+        case QUERY_EVENT: {
             struct query_event_buffer *q = (struct query_event_buffer*)(ev.data);
             char* db_name = query_event_db_name((&ev));
             size_t statement_len = query_event_statement_len((&ev));
@@ -331,7 +400,7 @@ namespace yelp {
             }
             break;
         }
-        case 4: {
+        case ROTATE_EVENT: {
             struct rotate_event_buffer *r = (struct rotate_event_buffer*)ev.data;
             size_t len = rotate_event_file_name_len((&ev));
             // ghetto inlined strndupa...
@@ -342,32 +411,32 @@ namespace yelp {
                << "next file name:     " << file_name << "\n";
             break;
         }
-        case 5: {
+        case INTVAR_EVENT: {
             struct intvar_event_buffer *i = (struct intvar_event_buffer*)ev.data;
             os << "variable type:      " << intvar_types[i->type] << "\n"
                << "value: 	            " << (unsigned long long)i->value << "\n";
             break;
         }
-        case 13: {
+        case RAND_EVENT: {
             struct rand_event_buffer *r = (struct rand_event_buffer*)ev.data;
             os << "seed 1:	            " << (unsigned long long)r->seed_1 << "\n"
            << "seed 2:	            " << (unsigned long long)r->seed_2 << "\n";
             break;
         }
-        case 15: {
-        // FORMAT_DESCRIPTION_EVENT
+        case FORMAT_DESCRIPTION_EVENT: {
             struct format_description_event_buffer *f = (struct format_description_event_buffer*)ev.data;
             os << "binlog version:     " << f->format_version << "\n"
                << "server version:     " << f->server_version << "\n"
                << "variable length:    " << format_description_event_data_len((&ev)) << "\n";
             break;
         }
-        case 16: {
-            // XID_EVENT
+        case XID_EVENT: {
             struct xid_event_buffer *x = (struct xid_event_buffer*)ev.data;
             os << "xid id:             " << (unsigned long long)x->id << "\n";
             break;
         }
+        default:
+            break;
         }
         return os;
     }
@@ -593,8 +662,11 @@ namespace yelp {
     binlog::format_description_entry::format_description_entry (const struct event_buffer &evbuf)
         : format_version (0), timestamp (0)
     {
-        if (evbuf.type_code != 15) {
+        if (evbuf.type_code != FORMAT_DESCRIPTION_EVENT) {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for format_description_entry") % evbuf.type_code).str ());
+        }
+        if (evbuf.data == NULL) {
+            return;
         }
         struct format_description_event_buffer *f = (struct format_description_event_buffer*)evbuf.data;
         format_version = f->format_version;
@@ -606,8 +678,11 @@ namespace yelp {
     binlog::query_entry::query_entry (const struct event_buffer &evbuf)
         : thread_id (0), query_time (0), error_code (0)
     {
-        if (evbuf.type_code != 2) {
+        if (evbuf.type_code != QUERY_EVENT) {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for query_entry") % evbuf.type_code).str ());
+        }
+        if (evbuf.data == NULL) {
+            return;
         }
         struct query_event_buffer *q = (struct query_event_buffer*)(evbuf.data);
         thread_id = q->thread_id;
@@ -622,9 +697,10 @@ namespace yelp {
     binlog::rand_entry::rand_entry (const struct event_buffer &evbuf)
         : seed_1 (0), seed_2 (0)
     {
-        if (evbuf.type_code != 13) {
+        if (evbuf.type_code != RAND_EVENT) {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for rand_entry") % evbuf.type_code).str ());
         }
+        // Can evbuf.data be NULL here ?
         struct rand_event_buffer *r = (struct rand_event_buffer*)evbuf.data;
         seed_1 = r->seed_1;
         seed_2 = r->seed_2;
@@ -634,9 +710,10 @@ namespace yelp {
     binlog::intvar_entry::intvar_entry (const struct event_buffer &evbuf)
         : type (0), value (0)
     {
-        if (evbuf.type_code != 5) {
+        if (evbuf.type_code != INTVAR_EVENT) {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for intvar_entry") % evbuf.type_code).str ());
         }
+        // Can evbuf.data be NULL here ?
         struct intvar_event_buffer *i = (struct intvar_event_buffer*)(evbuf.data);
         type = i->type;
         value = i->value;
@@ -646,9 +723,10 @@ namespace yelp {
     binlog::rotate_entry::rotate_entry (const struct event_buffer &evbuf)
         : next_position (0)
     {
-        if (evbuf.type_code != 4) {
+        if (evbuf.type_code != ROTATE_EVENT) {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for rotate_entry") % evbuf.type_code).str ());
         }
+        // Can evbuf.data be NULL here ?
         struct rotate_event_buffer *r = (struct rotate_event_buffer*)evbuf.data;
         next_position = r->next_position;
         size_t len = rotate_event_file_name_len((&evbuf));
@@ -659,9 +737,10 @@ namespace yelp {
     binlog::xid_entry::xid_entry (const struct event_buffer &evbuf)
         : id (0)
     {
-        if (evbuf.type_code != 16) {
+        if (evbuf.type_code != XID_EVENT) {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for id_entry") % evbuf.type_code).str ());
         }
+        // Can evbuf.data be NULL here ?
         struct xid_event_buffer *x = (struct xid_event_buffer*)evbuf.data;
         id = x->id;
     }
@@ -736,6 +815,7 @@ int main (int argc, char **argv) {
 	int num_to_show = 1;
 	int t_mode = 0;
 	int o_mode = 1;
+    char *database_limit = NULL;
 
 	/* Parse args */
 	while ((opt = getopt(argc, argv, "t:o:a:qQ")) != -1) {
@@ -771,6 +851,9 @@ int main (int argc, char **argv) {
             usage();
             return 1;
             break;
+        case 'D':
+            database_limit = strdup(optarg);
+            break;
         default:
             usage();
             return 1;
@@ -789,6 +872,9 @@ int main (int argc, char **argv) {
         yelp::binlog::iterator it = binlog.begin ();
         yelp::binlog::iterator end = binlog.end ();
         for (int n = 0; n < num_to_show && it != end ; ++n) {
+            if (q_mode) {
+                ::print_statement_event(std::cout, *(it->get_buffer()), q_mode, database_limit);
+            }
             std::cout << *(it++);
         }
     }
