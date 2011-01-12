@@ -1,0 +1,9 @@
+A fast mysql binlog parser, C++ & Darwin port with Python bindings
+using boost.python.
+
+This is a heavily modified version of the C ybinlogp tool. It's been
+c++ified heavily, is C++ iterator compatible and provides Python
+bindings via boost.python.
+
+Tested against boost 1.42 and 1.44.
+
