@@ -666,6 +666,7 @@ namespace yelp {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for format_description_entry") % evbuf.type_code).str ());
         }
         if (evbuf.data == NULL) {
+            // Instance will be left in default ctor'ed mode, but is that sufficient ?
             return;
         }
         struct format_description_event_buffer *f = (struct format_description_event_buffer*)evbuf.data;
@@ -682,6 +683,7 @@ namespace yelp {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for query_entry") % evbuf.type_code).str ());
         }
         if (evbuf.data == NULL) {
+            // Instance will be left in default ctor'ed mode, but is that sufficient ?
             return;
         }
         struct query_event_buffer *q = (struct query_event_buffer*)(evbuf.data);
@@ -700,7 +702,10 @@ namespace yelp {
         if (evbuf.type_code != RAND_EVENT) {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for rand_entry") % evbuf.type_code).str ());
         }
-        // Can evbuf.data be NULL here ?
+        if (evbuf.data == NULL) {
+            // Instance will be left in default ctor'ed mode, but is that sufficient ?
+            return;
+        }
         struct rand_event_buffer *r = (struct rand_event_buffer*)evbuf.data;
         seed_1 = r->seed_1;
         seed_2 = r->seed_2;
@@ -713,7 +718,10 @@ namespace yelp {
         if (evbuf.type_code != INTVAR_EVENT) {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for intvar_entry") % evbuf.type_code).str ());
         }
-        // Can evbuf.data be NULL here ?
+        if (evbuf.data == NULL) {
+            // Instance will be left in default ctor'ed mode, but is that sufficient ?
+            return;
+        }
         struct intvar_event_buffer *i = (struct intvar_event_buffer*)(evbuf.data);
         type = i->type;
         value = i->value;
@@ -726,7 +734,10 @@ namespace yelp {
         if (evbuf.type_code != ROTATE_EVENT) {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for rotate_entry") % evbuf.type_code).str ());
         }
-        // Can evbuf.data be NULL here ?
+        if (evbuf.data == NULL) {
+            // Instance will be left in default ctor'ed mode, but is that sufficient ?
+            return;
+        }
         struct rotate_event_buffer *r = (struct rotate_event_buffer*)evbuf.data;
         next_position = r->next_position;
         size_t len = rotate_event_file_name_len((&evbuf));
@@ -740,7 +751,10 @@ namespace yelp {
         if (evbuf.type_code != XID_EVENT) {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for id_entry") % evbuf.type_code).str ());
         }
-        // Can evbuf.data be NULL here ?
+        if (evbuf.data == NULL) {
+            // Instance will be left in default ctor'ed mode, but is that sufficient ?
+            return;
+        }
         struct xid_event_buffer *x = (struct xid_event_buffer*)evbuf.data;
         id = x->id;
     }
