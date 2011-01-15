@@ -56,6 +56,9 @@ namespace {
         if (entry.get_buffer()->type_code != C) {
             return NULL;
         }
+        if (entry.get_buffer()->data == NULL) {
+            throw std::runtime_error('event had NULL data');
+        }
         return new T (*entry.get_buffer ());
     }
 }
