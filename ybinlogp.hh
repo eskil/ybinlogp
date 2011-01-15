@@ -25,7 +25,10 @@ typedef off_t off64_t;
 extern "C" {
     const unsigned int BINLOG_VERSION = 4;
     
-    // we tack on extra stuff at the end
+    // we tack on extra stuff at the end 
+    // TODO: this here is "wrong", the FDE determines the real
+    // EVENT_HEADER_SIZE in it's header_len field and that's the value
+    // that should really be used. It just happens to be 19 now.
     const size_t EVENT_HEADER_SIZE = 19;
     // Room for event data. Semiarbitrarily picked...
     const size_t EVENT_PAYLOAD_SIZE = 32 - EVENT_HEADER_SIZE;
@@ -56,7 +59,7 @@ extern "C" {
     struct format_description_event_buffer {
         uint16_t	format_version;	// ought to be 4
         char		server_version[50];
-        uint32_t	timestamp;
+        uint32_t	create_timestamp;
         uint8_t		header_len;
         // random data
     };
@@ -114,15 +117,15 @@ namespace yelp {
 
         /** */
         struct format_description_entry {
-            format_description_entry () : format_version (0), timestamp (0) { }
+            format_description_entry () : format_version (0), create_timestamp (0) { }
             format_description_entry (const struct event_buffer &evbuf);
             bool operator== (const format_description_entry &rhs) const {
                 return format_version == rhs.format_version &&
-                    timestamp == rhs.timestamp &&
+                    create_timestamp == rhs.create_timestamp &&
                     server_version == rhs.server_version;
             }
             uint16_t format_version;
-            uint32_t timestamp;
+            uint32_t create_timestamp;
             std::string server_version;
         };
 

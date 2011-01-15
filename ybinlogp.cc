@@ -68,11 +68,17 @@ BOOST_PYTHON_MODULE(ybinlogp) {
 
     class_<event_buffer> ("event", "A MySQL event")
         .def_readonly ("timestamp", &event_buffer::timestamp)
+        .def_readonly ("type_code", &event_buffer::type_code)
         .def_readonly ("server_id", &event_buffer::server_id)
+        .def_readonly ("length", &event_buffer::length)
+        .def_readonly ("next_position", &event_buffer::next_position)
+        .def_readonly ("flags", &event_buffer::flags)
+        .def_readonly ("offset", &event_buffer::offset)
+        .def_readonly ("data", &event_buffer::data)
         ;
     class_<yelp::binlog::format_description_entry> ("format_description", "A MySQL format description", no_init)
         .def_readonly ("format_version", &yelp::binlog::format_description_entry::format_version)
-        .def_readonly ("timestamp", &yelp::binlog::format_description_entry::timestamp)
+        .def_readonly ("create_timestamp", &yelp::binlog::format_description_entry::create_timestamp)
         .def_readonly ("server_version", &yelp::binlog::format_description_entry::server_version)
         ;
     class_<yelp::binlog::query_entry> ("query", "A MySQL query event", no_init)
@@ -139,6 +145,8 @@ namespace {
     static const uint32_t MAX_EVENT_LENGTH = 10485760;
     // 0 <= server_id  <= 2**31
     static const uint32_t MAX_SERVER_ID = 4294967295;
+
+    static const char BINLOG_MAGIC[4] = {0xfe, 0x62, 0x69, 0x6e};
 
     // Used in main to toggle dumping query details or not.
     int q_mode = 0;
@@ -503,7 +511,15 @@ namespace yelp {
      * Read the FDE and set the server-id
      **/
     int binlog::read_fde (struct event_buffer *evbuf) {
-        if (read_event (evbuf, 4) < 0) {
+        char magic[sizeof(BINLOG_MAGIC)];
+        if (::read (m_fd, magic, sizeof(BINLOG_MAGIC)) != sizeof(BINLOG_MAGIC)) {
+            return -1;
+        }
+        if (::memcmp (magic, BINLOG_MAGIC, sizeof(BINLOG_MAGIC)) != 0) {
+            errno = EINVAL;
+            return -1;
+        }
+        if (read_event (evbuf, 0) < 0) {
             return -1;
         }
 #if DEBUG
@@ -519,11 +535,10 @@ namespace yelp {
 
 
     int binlog::read_event (struct event_buffer *evbuf, off64_t offset) {
-        ssize_t amt_read;
         if (m_owns_file && (::lseek (m_fd, offset, SEEK_SET) < 0)) {
             throw std::runtime_error (std::string ("lseek:") + ::strerror (errno));
         }
-        amt_read = ::read (m_fd, (void*)evbuf, EVENT_HEADER_SIZE);
+        ssize_t amt_read = ::read (m_fd, (void*)evbuf, EVENT_HEADER_SIZE);
         evbuf->offset = offset;
         evbuf->data = NULL;
         if (amt_read < 0) {
@@ -531,23 +546,23 @@ namespace yelp {
         } else if ((size_t)amt_read != EVENT_HEADER_SIZE) {
             return -1;
         }
-        if (check_event (evbuf)) {
+        // Here we could check the timestamp, but there's a tendency
+        // for timestamps to not always be in linear order... huh?
 #if DEBUG
-            fprintf (stdout, "newing %lu bytes\n", evbuf->length - EVENT_HEADER_SIZE);
+        fprintf (stdout, "newing %lu bytes\n", evbuf->length - EVENT_HEADER_SIZE);
 #endif
-            if (evbuf->length - EVENT_HEADER_SIZE > sizeof (evbuf->payload)) {
-                evbuf->heaped = new char[evbuf->length - EVENT_HEADER_SIZE];
-                evbuf->data = evbuf->heaped;
-            } else {
-                evbuf->heaped = NULL;
-                evbuf->data = (char*)&(evbuf->payload);
-            }
+        if (evbuf->length - EVENT_HEADER_SIZE > sizeof (evbuf->payload)) {
+            evbuf->heaped = new char[evbuf->length - EVENT_HEADER_SIZE];
+            evbuf->data = evbuf->heaped;
+        } else {
+            evbuf->heaped = NULL;
+            evbuf->data = (char*)&(evbuf->payload);
+        }
 #if DEBUG
-            fprintf(stderr, "newed %lu bytes at 0x%p for a %s\n", evbuf->length - EVENT_HEADER_SIZE, evbuf->data, event_types[evbuf->type_code]);
+        fprintf(stderr, "newed %lu bytes at 0x%p for a %s\n", evbuf->length - EVENT_HEADER_SIZE, evbuf->data, event_types[evbuf->type_code]);
 #endif
-            if (read (m_fd, evbuf->data, evbuf->length - EVENT_HEADER_SIZE) < 0) {
-                throw std::runtime_error (std::string ("read extra (short): ") + ::strerror (errno));
-            }
+        if (read (m_fd, evbuf->data, evbuf->length - EVENT_HEADER_SIZE) < 0) {
+            throw std::runtime_error (std::string ("read extra (short): ") + ::strerror (errno));
         }
         return 0;
     }
@@ -660,18 +675,14 @@ namespace yelp {
 
 
     binlog::format_description_entry::format_description_entry (const struct event_buffer &evbuf)
-        : format_version (0), timestamp (0)
+        : format_version (0), create_timestamp (0)
     {
         if (evbuf.type_code != FORMAT_DESCRIPTION_EVENT) {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for format_description_entry") % evbuf.type_code).str ());
         }
-        if (evbuf.data == NULL) {
-            // Instance will be left in default ctor'ed mode, but is that sufficient ?
-            return;
-        }
         struct format_description_event_buffer *f = (struct format_description_event_buffer*)evbuf.data;
         format_version = f->format_version;
-        timestamp = f->timestamp;
+        create_timestamp = f->create_timestamp;
         server_version = f->server_version;
     }
 
@@ -681,10 +692,6 @@ namespace yelp {
     {
         if (evbuf.type_code != QUERY_EVENT) {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for query_entry") % evbuf.type_code).str ());
-        }
-        if (evbuf.data == NULL) {
-            // Instance will be left in default ctor'ed mode, but is that sufficient ?
-            return;
         }
         struct query_event_buffer *q = (struct query_event_buffer*)(evbuf.data);
         thread_id = q->thread_id;
@@ -702,10 +709,6 @@ namespace yelp {
         if (evbuf.type_code != RAND_EVENT) {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for rand_entry") % evbuf.type_code).str ());
         }
-        if (evbuf.data == NULL) {
-            // Instance will be left in default ctor'ed mode, but is that sufficient ?
-            return;
-        }
         struct rand_event_buffer *r = (struct rand_event_buffer*)evbuf.data;
         seed_1 = r->seed_1;
         seed_2 = r->seed_2;
@@ -718,10 +721,6 @@ namespace yelp {
         if (evbuf.type_code != INTVAR_EVENT) {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for intvar_entry") % evbuf.type_code).str ());
         }
-        if (evbuf.data == NULL) {
-            // Instance will be left in default ctor'ed mode, but is that sufficient ?
-            return;
-        }
         struct intvar_event_buffer *i = (struct intvar_event_buffer*)(evbuf.data);
         type = i->type;
         value = i->value;
@@ -729,14 +728,10 @@ namespace yelp {
 
 
     binlog::rotate_entry::rotate_entry (const struct event_buffer &evbuf)
-        : next_position (0)
+        : next_position (4) // defaults to 4 to skip the magic bytes in the file
     {
         if (evbuf.type_code != ROTATE_EVENT) {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for rotate_entry") % evbuf.type_code).str ());
-        }
-        if (evbuf.data == NULL) {
-            // Instance will be left in default ctor'ed mode, but is that sufficient ?
-            return;
         }
         struct rotate_event_buffer *r = (struct rotate_event_buffer*)evbuf.data;
         next_position = r->next_position;
@@ -750,10 +745,6 @@ namespace yelp {
     {
         if (evbuf.type_code != XID_EVENT) {
             throw std::invalid_argument ((boost::format ("event_buffer has type_code %d, not valid for id_entry") % evbuf.type_code).str ());
-        }
-        if (evbuf.data == NULL) {
-            // Instance will be left in default ctor'ed mode, but is that sufficient ?
-            return;
         }
         struct xid_event_buffer *x = (struct xid_event_buffer*)evbuf.data;
         id = x->id;
