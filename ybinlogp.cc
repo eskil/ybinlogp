@@ -57,7 +57,7 @@ namespace {
             return NULL;
         }
         if (entry.get_buffer()->data == NULL) {
-            throw std::runtime_error('event had NULL data');
+            throw std::runtime_error("event had NULL data");
         }
         return new T (*entry.get_buffer ());
     }
