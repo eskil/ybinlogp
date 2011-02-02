@@ -516,13 +516,16 @@ namespace yelp {
     int binlog::read_fde (struct event_buffer *evbuf) {
         char magic[sizeof(BINLOG_MAGIC)];
         if (::read (m_fd, magic, sizeof(BINLOG_MAGIC)) != sizeof(BINLOG_MAGIC)) {
+            std::cout << "ass\n";
             return -1;
         }
         if (::memcmp (magic, BINLOG_MAGIC, sizeof(BINLOG_MAGIC)) != 0) {
             errno = EINVAL;
+            std::cout << "grass\n";
             return -1;
         }
-        if (read_event (evbuf, 0) < 0) {
+        if (read_event (evbuf, sizeof(BINLOG_MAGIC)) < 0) {
+            std::cout << "gas\n";
             return -1;
         }
 #if DEBUG
@@ -530,8 +533,9 @@ namespace yelp {
 #endif
         struct format_description_event_buffer *f = (struct format_description_event_buffer*) evbuf->data;
         if (f->format_version != BINLOG_VERSION) {
-            errno = EINVAL;
-            return -1;
+            std::cout << "ass grass gas\n";
+            //errno = EINVAL;
+            //return -1;
         }
         return 0;
     }
