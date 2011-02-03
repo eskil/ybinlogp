@@ -1,0 +1,9 @@
+#!/bin/bash
+#
+# ghetto build script for linux, tested under Fedora 14
+
+AR="g++ -shared" \
+LD="g++" \
+LDFLAGS="-lboost_python $(pkg-config --libs python)" \
+CXXFLAGS="$(pkg-config --cflags python) -fPIC" \
+make

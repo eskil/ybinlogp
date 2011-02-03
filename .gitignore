@@ -1,2 +1,5 @@
 binlogp
+ybinlogp
+ybinlogp.so
 *.o
+*~
