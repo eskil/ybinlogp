@@ -236,7 +236,8 @@ namespace yelp {
             const_pointer operator-> () const { return &m_entry; }
 
             /* 
-            // "Proper" C++ definition...
+            // "Proper" C++ definition, but see above for why not. 
+            // Making python bindings less angry.
             typedef value_type& reference;
             typedef const value_type& const_reference;
             typedef value_type* pointer;
@@ -293,7 +294,10 @@ namespace yelp {
         iterator end () { return iterator (); }
 
     private:
-        int read_fde (struct event_buffer *evbuf);
+        /**
+         * Check if a file looks valid (binlog version, magic bytes etc
+         */
+        int check_file (struct event_buffer *evbuf);
 
         /**
          * Check to see if an event looks valid.

@@ -67,10 +67,10 @@ namespace {
 BOOST_PYTHON_MODULE(ybinlogp) {
     using namespace boost::python;
 
-    scope().attr ("__doc__") = "Hey I'm a docstring for the binlog parser woot!";
+    scope().attr ("__doc__") = "Hey I'm a docstring for the binlogparser woot!\nI wish someone would add the comments from ybinlog.py where...";
 
     class_<event_buffer> ("event", "A MySQL event")
-        .def_readonly ("timestamp", &event_buffer::timestamp)
+        .def_readonly ("timestamp", &event_buffer::timestamp, "docstrings go here..")
         .def_readonly ("type_code", &event_buffer::type_code)
         .def_readonly ("server_id", &event_buffer::server_id)
         .def_readonly ("length", &event_buffer::length)
@@ -80,36 +80,36 @@ BOOST_PYTHON_MODULE(ybinlogp) {
         .def_readonly ("data", &event_buffer::data)
         ;
     class_<yelp::binlog::format_description_entry> ("format_description", "A MySQL format description", no_init)
-        .def_readonly ("format_version", &yelp::binlog::format_description_entry::format_version)
+        .def_readonly ("format_version", &yelp::binlog::format_description_entry::format_version, "docstrings go here..")
         .def_readonly ("create_timestamp", &yelp::binlog::format_description_entry::create_timestamp)
         .def_readonly ("server_version", &yelp::binlog::format_description_entry::server_version)
         ;
     class_<yelp::binlog::query_entry> ("query", "A MySQL query event", no_init)
-        .def_readonly ("thread_id", &yelp::binlog::query_entry::thread_id)
+        .def_readonly ("thread_id", &yelp::binlog::query_entry::thread_id, "docstrings go here..")
         .def_readonly ("query_time", &yelp::binlog::query_entry::query_time)
         .def_readonly ("error_code", &yelp::binlog::query_entry::error_code)
         .def_readonly ("database", &yelp::binlog::query_entry::database)
         .def_readonly ("statement", &yelp::binlog::query_entry::statement)
         ;
     class_<yelp::binlog::rand_entry> ("rand", "A MySQL rand event", no_init)
-        .def_readonly ("seed_1", &yelp::binlog::rand_entry::seed_1)
+        .def_readonly ("seed_1", &yelp::binlog::rand_entry::seed_1, "docstrings go here..")
         .def_readonly ("seed_2", &yelp::binlog::rand_entry::seed_2)
         ;
     class_<yelp::binlog::intvar_entry> ("intvar", "A MySQL intvar event", no_init)
-        .def_readonly ("type", &yelp::binlog::intvar_entry::type)
+        .def_readonly ("type", &yelp::binlog::intvar_entry::type, "docstrings go here..")
         .def_readonly ("value", &yelp::binlog::intvar_entry::value)
         ;
     class_<yelp::binlog::rotate_entry> ("rotate", "A MySQL rotate binlog entry", no_init)
-        .def_readonly ("next_position", &yelp::binlog::rotate_entry::next_position)
+        .def_readonly ("next_position", &yelp::binlog::rotate_entry::next_position, "docstrings go here..")
         .def_readonly ("next_file", &yelp::binlog::rotate_entry::next_file)
         ;
     class_<yelp::binlog::xid_entry> ("xid", "A MySQL xid binlog entry", no_init)
-        .def_readonly ("id", &yelp::binlog::xid_entry::id)
+        .def_readonly ("id", &yelp::binlog::xid_entry::id, "docstrings go here..")
         ;
     class_<yelp::binlog::entry> ("entry", "A MySQL query event")
         .def ("__str__", &entry_str)
         .def ("__repr__", &entry_str)
-        .add_property ("event", make_function (&const_get_entry_buffer, return_value_policy<reference_existing_object> ()))
+        .add_property ("event", make_function (&const_get_entry_buffer, return_value_policy<reference_existing_object> ()), "docstrings go here..")
         .add_property ("format_description", make_function (new_from_entry<yelp::binlog::format_description_entry, 15>,
                                                             return_value_policy<manage_new_object> ()))
         .add_property ("query", make_function (new_from_entry<yelp::binlog::query_entry, 2>,
@@ -126,8 +126,7 @@ BOOST_PYTHON_MODULE(ybinlogp) {
     class_<yelp::binlog::iterator> ("binlog.iterator", "This is MySQL binlog iterator")
         ;
     class_<yelp::binlog> ("binlog", "This is MySQL binlog file parser", init<int> ())
-        //.def ("__iter__", iterator<yelp::binlog> ())
-        .def ("__iter__", iterator<yelp::binlog> ())
+        .def ("__iter__", iterator<yelp::binlog> (), "docstrings go here..")
         ;
 }
 
@@ -264,12 +263,12 @@ namespace {
     }
 
 
-    void init_event (struct event_buffer *evbuf) {
+    inline void init_event (struct event_buffer *evbuf) {
         memset (evbuf, 0, sizeof (struct event_buffer));
     }
 
 
-    void dispose_event (struct event_buffer *evbuf) {
+    inline void dispose_event (struct event_buffer *evbuf) {
         if (evbuf == NULL) {
             return;
         }
@@ -282,7 +281,7 @@ namespace {
     }
 
 
-    void reset_event (struct event_buffer *evbuf) {
+    inline void reset_event (struct event_buffer *evbuf) {
 #if DEBUG
         fprintf (stderr, "Resetting event\n");
 #endif
@@ -406,7 +405,7 @@ namespace yelp {
             os << "status var length:  " << q->status_var_len << "\n"
                << "db_name:            " << db_name << "\n"
                << "statement length:   " << statement_len << "\n";
-            if (q_mode > 0) {
+            if (q_mode == 0) {
                 os << "statement:          " << statement << "\n";
             }
             break;
@@ -467,10 +466,10 @@ namespace yelp {
         if ((m_fd = ::open (filename.c_str (), oflags)) <= 0) {
             throw std::runtime_error (std::string ("open: ") + ::strerror (errno));
         }
-
+        
         m_evbuf = (struct event_buffer*)malloc (sizeof (struct event_buffer));
         init_event (m_evbuf);
-        if (read_fde (m_evbuf) < 0) {
+        if (check_file (m_evbuf) < 0) {
             throw std::runtime_error (std::string ("read_fde: ") + ::strerror (errno));
         }
         m_min_timestamp = m_evbuf->timestamp;
@@ -494,9 +493,7 @@ namespace yelp {
     {
         m_evbuf = (struct event_buffer*)malloc (sizeof (struct event_buffer));
         init_event (m_evbuf);
-        if (read_fde (m_evbuf) < 0) {
-            throw std::runtime_error (std::string ("read_fde: ") + ::strerror (errno));
-        }
+        read_event (m_evbuf, ::lseek (m_fd, 0, SEEK_CUR));
         m_min_timestamp = m_evbuf->timestamp;
     }
 
@@ -513,7 +510,7 @@ namespace yelp {
     /**
      * Read the FDE and set the server-id
      **/
-    int binlog::read_fde (struct event_buffer *evbuf) {
+    int binlog::check_file (struct event_buffer *evbuf) {
         char magic[sizeof(BINLOG_MAGIC)];
         if (::read (m_fd, magic, sizeof(BINLOG_MAGIC)) != sizeof(BINLOG_MAGIC)) {
             std::cout << "ass\n";
@@ -539,7 +536,7 @@ namespace yelp {
 
 
     int binlog::read_event (struct event_buffer *evbuf, off64_t offset) {
-        if (m_owns_file && (::lseek (m_fd, offset, SEEK_SET) < 0)) {
+        if (::lseek (m_fd, offset, SEEK_SET) < 0) {
             throw std::runtime_error (std::string ("lseek:") + ::strerror (errno));
         }
         ssize_t amt_read = ::read (m_fd, (void*)evbuf, EVENT_HEADER_SIZE);
@@ -572,6 +569,8 @@ namespace yelp {
     }
 
 
+    // FIXME: this shouldn't be necessary
+    // And then m_evbuf and m_min/max_timestamp can go away too
     int binlog::check_event (struct event_buffer *evbuf) {
         if (evbuf->server_id < MAX_SERVER_ID &&
             evbuf->type_code > MIN_TYPE_CODE &&
@@ -611,6 +610,7 @@ namespace yelp {
                 dispose_event (evbuf);
                 return -1;
             }
+            // FIXME: inline the check for the time and get rid of check_event
             if (check_event (evbuf)) {
                 if (outbuf != NULL) {
                     reset_event (outbuf);
