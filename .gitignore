@@ -3,3 +3,6 @@ ybinlogp
 ybinlogp.so
 *.o
 *~
+build/
+dist/
+ybinlogp.egg-info/
