@@ -12,7 +12,8 @@ log = open(sys.argv[1])
 # When calling from Python, you're responsible for seeking the fd to
 # the right offset, aka 4 bytes into the file to skip the magic bytes.
 log.seek(4)
-binlog = ybinlogp.binlog(log.fileno())
+# Don't pass anything that doesn't have a fileno...
+binlog = ybinlogp.binlog(log)
 
 # Binlog is iterable...
 for entry in binlog:

@@ -15,16 +15,15 @@
 #include <iosfwd>
 #include <boost/utility.hpp>
 #include <boost/shared_ptr.hpp>
+#include <boost/python.hpp>
 
 #if defined(DARWIN)
-// Darwin doesn't disinguish between 32 and 64 bit offsets, everything in 64bit...
+// Darwin doesn't disinguish between 32 and 64 bit offsets, everything is 64bit...
 #include <fcntl.h>
 typedef off_t off64_t;
 #endif
 
 extern "C" {
-    const unsigned int BINLOG_VERSION = 4;
-    
     // we tack on extra stuff at the end 
     // TODO: this here is "wrong", the FDE determines the real
     // EVENT_HEADER_SIZE in it's header_len field and that's the value
@@ -276,17 +275,28 @@ namespace yelp {
         };
 
         /** Constructor
+
             \param filename name of the binlog file to process
             \param starting_offset start reading from first entry after this offset
             \param starting_time start reading from first entry closest to this time
+
             \note time trumphs offset
         */
         binlog (const std::string &filename, off64_t starting_offset, time_t starting_time);
 
         /** Constructor
+
             \param fd file to read, must be positioned right
         */
         binlog (int fd);
+
+        /** Constructor for passing in python file objects.
+
+            \param python file object
+
+            \note it had damn well better have a fileno, otherwise there will be punishment.
+        */
+        binlog(boost::python::object file);
 
         virtual ~binlog ();
 

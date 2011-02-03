@@ -28,7 +28,6 @@
 #undef DEFINED_GNU_SOURCE
 #endif /* DEFINED_GNU_SOURCE */
 
-#include <boost/python.hpp>
 #include <boost/format.hpp>
 #include <boost/bind.hpp>
 #include <iostream>
@@ -79,11 +78,13 @@ BOOST_PYTHON_MODULE(ybinlogp) {
         .def_readonly ("offset", &event_buffer::offset)
         .def_readonly ("data", &event_buffer::data)
         ;
+
     class_<yelp::binlog::format_description_entry> ("format_description", "A MySQL format description", no_init)
         .def_readonly ("format_version", &yelp::binlog::format_description_entry::format_version, "docstrings go here..")
         .def_readonly ("create_timestamp", &yelp::binlog::format_description_entry::create_timestamp)
         .def_readonly ("server_version", &yelp::binlog::format_description_entry::server_version)
         ;
+
     class_<yelp::binlog::query_entry> ("query", "A MySQL query event", no_init)
         .def_readonly ("thread_id", &yelp::binlog::query_entry::thread_id, "docstrings go here..")
         .def_readonly ("query_time", &yelp::binlog::query_entry::query_time)
@@ -91,21 +92,26 @@ BOOST_PYTHON_MODULE(ybinlogp) {
         .def_readonly ("database", &yelp::binlog::query_entry::database)
         .def_readonly ("statement", &yelp::binlog::query_entry::statement)
         ;
+
     class_<yelp::binlog::rand_entry> ("rand", "A MySQL rand event", no_init)
         .def_readonly ("seed_1", &yelp::binlog::rand_entry::seed_1, "docstrings go here..")
         .def_readonly ("seed_2", &yelp::binlog::rand_entry::seed_2)
         ;
+
     class_<yelp::binlog::intvar_entry> ("intvar", "A MySQL intvar event", no_init)
         .def_readonly ("type", &yelp::binlog::intvar_entry::type, "docstrings go here..")
         .def_readonly ("value", &yelp::binlog::intvar_entry::value)
         ;
+
     class_<yelp::binlog::rotate_entry> ("rotate", "A MySQL rotate binlog entry", no_init)
         .def_readonly ("next_position", &yelp::binlog::rotate_entry::next_position, "docstrings go here..")
         .def_readonly ("next_file", &yelp::binlog::rotate_entry::next_file)
         ;
+
     class_<yelp::binlog::xid_entry> ("xid", "A MySQL xid binlog entry", no_init)
         .def_readonly ("id", &yelp::binlog::xid_entry::id, "docstrings go here..")
         ;
+
     class_<yelp::binlog::entry> ("entry", "A MySQL query event")
         .def ("__str__", &entry_str)
         .def ("__repr__", &entry_str)
@@ -123,12 +129,14 @@ BOOST_PYTHON_MODULE(ybinlogp) {
         .add_property ("xid", make_function (new_from_entry<yelp::binlog::xid_entry, 16>,
                                              return_value_policy<manage_new_object> ()))
         ;
+
     class_<yelp::binlog::iterator> ("binlog.iterator", "This is MySQL binlog iterator")
         ;
+
     // Exposing the other ctor could be nice too, eg. via a
     // classmethod
     // (http://wiki.python.org/moin/boost.python/HowTo#staticclassfunctions)
-    class_<yelp::binlog> ("binlog", "This is MySQL binlog file parser", init<int> ())
+    class_<yelp::binlog> ("binlog", "This is MySQL binlog file parser", init<object> ())
         .def ("__iter__", iterator<yelp::binlog> (), "docstrings go here..")
         ;
 }
@@ -139,6 +147,9 @@ namespace {
     // how many bytes to seek ahead looking for a record
     static const uint32_t MAX_RETRIES = 102400;
 
+    // The binlog version we support
+    const unsigned int BINLOG_VERSION = 4;
+    
     template<typename T1, typename T2>
     inline T1 get_bit(T1 x, T2 bit) { return !!(x & 1 << (bit-1)); }
 
@@ -492,6 +503,17 @@ namespace yelp {
 
     binlog::binlog (int fd)
         : m_fd (fd), m_owns_file (false), m_stbuf (NULL), m_evbuf (NULL),
+          m_min_timestamp (0), m_max_timestamp (::time(NULL))
+    {
+        m_evbuf = (struct event_buffer*)malloc (sizeof (struct event_buffer));
+        init_event (m_evbuf);
+        read_event (m_evbuf, ::lseek (m_fd, 0, SEEK_CUR));
+        m_min_timestamp = m_evbuf->timestamp;
+    }
+
+
+    binlog::binlog(boost::python::object file) 
+        : m_fd (boost::python::extract<int> (file.attr("fileno") ())), m_owns_file (false), m_stbuf (NULL), m_evbuf (NULL),
           m_min_timestamp (0), m_max_timestamp (::time(NULL))
     {
         m_evbuf = (struct event_buffer*)malloc (sizeof (struct event_buffer));
