@@ -125,6 +125,9 @@ BOOST_PYTHON_MODULE(ybinlogp) {
         ;
     class_<yelp::binlog::iterator> ("binlog.iterator", "This is MySQL binlog iterator")
         ;
+    // Exposing the other ctor could be nice too, eg. via a
+    // classmethod
+    // (http://wiki.python.org/moin/boost.python/HowTo#staticclassfunctions)
     class_<yelp::binlog> ("binlog", "This is MySQL binlog file parser", init<int> ())
         .def ("__iter__", iterator<yelp::binlog> (), "docstrings go here..")
         ;
