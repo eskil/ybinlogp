@@ -847,8 +847,6 @@ int main (int argc, char **argv) {
 	off64_t starting_offset = 0;
 	int show_all = 0;
 	int num_to_show = 1;
-	int t_mode = 0;
-	int o_mode = 1;
     char *database_limit = NULL;
 
 	/* Parse args */
@@ -856,13 +854,9 @@ int main (int argc, char **argv) {
 		switch (opt) {
         case 't':		/* Time mode */
             target_time = atol(optarg);
-            t_mode = 1;
-            o_mode = 0;
             break;
         case 'o':		/* Offset mode */
             starting_offset = atoll(optarg);
-            t_mode  = 0;
-            o_mode = 1;
             break;
         case 'a':
             if (strncmp(optarg, "all", 3) == 0) {
